@@ -1,0 +1,25 @@
+---
+- name: Retrieve inventory from Ansible Automation Controller
+  hosts: localhost
+  gather_facts: false
+
+
+  tasks:
+    - name: Include secrets
+      include_vars: secret.yml
+
+    - name: Load the inventory from Automation Controller using the connection info
+      set_fact:
+        controller_inventory: "{{ lookup('awx.awx.controller_api', 'inventories?page_size=200',
+                                          host=automation_controller_host,
+                                          username=controller_username,
+                                          password=controller_password,
+                                          verify_ssl=verify_ssl) }}"
+
+    - name: debug the output
+      ansible.builtin.debug:
+        msg: "{{ controller_inventory }}"
+
+    - name: debug the output
+      ansible.builtin.debug:
+        msg: "length is {{ controller_inventory | length }}"
