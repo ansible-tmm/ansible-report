@@ -24,11 +24,13 @@
       ansible.builtin.uri:
         url: "https://{{ automation_controller_host }}/api/v2/job_templates/?inventory_id={{ item.id }}"
         method: GET
-        user: "{{ controller_username }}"
-        password: "{{ controller_password }}"
-        force_basic_auth: true
+        # user: "{{ controller_username }}"
+        # password: "{{ controller_password }}"
+        # force_basic_auth: true
         validate_certs: "{{ verify_ssl }}"
         return_content: true
+        headers:
+          Authorization: "Bearer 2QnGTupS1bVWMF4wJ8PePxUUjlOe4i"
       loop: "{{ controller_inventory }}"
       loop_control:
         label: "{{ item.name }}"
