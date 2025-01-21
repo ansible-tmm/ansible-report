@@ -410,7 +410,7 @@ table.main_attraction p.highlight_value {
 }
 
 table.net_info.inventory_info {
-  width: 50%;
+  width: 100%;
 }
 
 table.net_info.main_attraction tr {
@@ -430,8 +430,8 @@ div#hostname {
 
 .engineer_partial {
   position: relative;
-  height: 96.97px;
-  width: 50px;
+  height: 58px;
+  width: 30px;
   background-image: url(../engineer_background.png);
   background-size: contain;
   background-repeat: no-repeat;
@@ -439,14 +439,16 @@ div#hostname {
 
 .engineer {
   position: relative;
-  height: 96.97px;
-  width: 50px;
+  height: 58px;
+  width: 30px;
 }
 
 .engineer_container {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   padding-top: 20px;
+  width: 500px;
 }
 
 .engineer_legend {

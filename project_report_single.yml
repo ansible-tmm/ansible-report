@@ -1,0 +1,107 @@
+---
+- name: Retrieve inventory from Ansible Automation Controller
+  hosts: localhost
+  gather_facts: false
+  vars:
+    provided_project_id: ""
+    page_size: 25
+
+  tasks:
+    - name: Include secrets
+      ansible.builtin.include_vars: secret.yml
+
+    - name: Print out job id
+      ansible.builtin.debug:
+        msg: "Project ID is set to -> '{{ provided_project_id }}'"
+
+    - name: Fail if no Project ID is set
+      ansible.builtin.fail:
+        msg: "project ID is not set! Please set project ID var provided_project_id"
+      when: provided_project_id == ""
+
+    - name: Fetch project information
+      ansible.builtin.uri:
+        url: "https://{{ automation_controller_host }}/api/v2/projects/{{ provided_project_id }}"
+        method: GET
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ verify_ssl }}"
+        return_content: true
+      register: project_info
+
+    - name: Fetch job template information
+      ansible.builtin.uri:
+        url: "https://{{ automation_controller_host }}/api/v2/job_templates/?project_id={{ provided_project_id }}"
+        method: GET
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ verify_ssl }}"
+        return_content: true
+      register: job_template_info
+
+    # - name: Print out project information
+    #   ansible.builtin.debug:
+    #     var: job_template_info
+
+    - name: Fetch job list with pagination details
+      ansible.builtin.uri:
+        url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ provided_project_id }}&page_size={{ page_size }}"
+        method: GET
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ verify_ssl }}"
+        return_content: true
+      register: job_list_response
+
+    - name: Calculate total pages
+      ansible.builtin.set_fact:
+        total_pages: "{{ (job_list_response.json.count + page_size - 1) // page_size }}"
+
+    - name: Debug total pages
+      ansible.builtin.debug:
+        msg:
+          - "Page size: {{ page_size }}"
+          - "Total jobs: {{ job_list_response.json.count }}"
+          - "Total number of pages: {{ total_pages }}"
+
+    # - name: Sean override page , i.e. I only want to try 3 pages
+    #   set_fact:
+    #     total_pages: 2
+
+    - name: Retrieve job list for each page and store in a dictionary
+      ansible.builtin.uri:
+        url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ provided_project_id }}&page_size={{ page_size }}&page={{ item }}"
+        method: GET
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ verify_ssl }}"
+        return_content: true
+      with_sequence: start=1 end={{ total_pages }}
+      register: job_list_results
+
+    # - name: Debug job_list_results
+    #   ansible.builtin.debug:
+    #     var: job_list_results
+
+    - name: Combine all job results into a single list
+      ansible.builtin.set_fact:
+        all_jobs: "{{ job_list_results.results | map(attribute='json.results') | flatten }}"
+
+
+- name: Build report with facts - Dynamic Documentation
+  hosts: "{{ _hosts | default('localhost') }}"
+  gather_facts: true
+
+  tasks:
+    - name: Template report into HTML
+      ansible.builtin.include_role:
+        name: "template_project"
+
+    - name: Load report to host on AWS S3
+      ansible.builtin.include_role:
+        name: "build_report_s3"
+      when: inventory_hostname == 'localhost'

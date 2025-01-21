@@ -38,7 +38,7 @@
 
     - name: Combine job template list into a dictionary
       ansible.builtin.set_fact:
-        job_template_list_dict: "{{ job_template_list_dict | default({}) | combine({item.id: (job_template_list_results.results | selectattr('item.id', 'eq', item.id) | map(attribute='content') | map('from_json'))[0] }) }}"
+        job_template_list_dict: "{{ job_template_list_dict | default({}) | combine({item.id: (job_template_list_results.results | selectattr('item.id', 'eq', item.id) | map(attribute='content') | map('from_json'))[0]}) }}"
       loop: "{{ controller_inventory }}"
       loop_control:
         label: "{{ item.name }}"
@@ -72,8 +72,15 @@
 - name: Build report with facts - Dynamic Documentation
   hosts: "{{ _hosts | default('localhost') }}"
   gather_facts: true
+  vars:
+    reports_aws_bucket_name: sean-jan-custom
 
   tasks:
+
+    - name: Include secrets
+      ansible.builtin.debug:
+        var: reports_aws_bucket_name
+
     - name: Template report into HTML
       ansible.builtin.include_role:
         name: "template"

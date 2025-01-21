@@ -1,0 +1,134 @@
+<!-- INTERNAL TABLE FOR Ansible -->
+<div id="accordion">
+<div>
+<h3>Ansible Automation Info</h3>
+<div class="net_content">
+<table class="net_info">
+<tbody>
+  <tr>
+    <td>Ansible user</td>
+    <td class="sub_net_info">{{ ansible_user_id | default('unknown') }}</td>
+  </tr>
+  <tr>
+    <td>Ansible FQDN</td>
+    <td class="sub_net_info">{{ ansible_fqdn | default('unknown') }}</td>
+  </tr>
+  <tr>
+    <td>Ansible core version</td>
+    <td class="sub_net_info">{{ ansible_version.full }}</td>
+  </tr>
+  <tr>
+    <td>Ansible Python</td>
+    <td class="sub_net_info">{{ ansible_python_version | default('unknown')}}</td>
+  </tr>
+  <tr>
+    <td>Host OS</td>
+    <td class="sub_net_info">{{ ansible_distribution | default ("unknown distribution")}} {{ ansible_distribution_version | default ("unknown distro version") }}</td>
+  </tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- END INTERNAL TABLE FOR Ansible -->
+
+
+
+<!-- modified for project based counting -->
+
+    {% set outside_loop = namespace(all_jobs_aggregate_total_elapsed_time=0.0, manual_jobs_aggregate_total_elapsed_time=0.0) %}
+
+    {% if all_jobs | length > 0 %}
+    {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0) %}
+
+    {% for job in all_jobs %}
+        {% set job_elapsed_time = job.elapsed | default(0.0) %}
+        {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
+
+        {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
+        {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
+    {% endfor %}
+    {% endif %}
+
+    {% set running = ns.total_hosts %}
+    {% set total = ns.total_hosts %}
+
+    {% set total_jobs = all_jobs | length %}
+
+    {% set jobs_per_inventory = total_jobs | default("0") %}
+
+    {% set effective_running = running if running > 0 else 1 %}
+
+    {% set total_seconds_manual = (manual_time_per_job * ns.total_hosts) %}
+
+    {% set outside_loop.all_jobs_aggregate_total_elapsed_time = ns.total_elapsed_time %}
+    {% set outside_loop.manual_jobs_aggregate_total_elapsed_time = outside_loop.manual_jobs_aggregate_total_elapsed_time + total_seconds_manual %}
+
+<!-- should be same after this point as inventory report -->
+
+
+{% set all_jobs_aggregate_days = outside_loop.all_jobs_aggregate_total_elapsed_time // 86400 %}
+{% set all_jobs_aggregate_hours = (outside_loop.all_jobs_aggregate_total_elapsed_time % 86400) // 3600 %}
+{% set all_jobs_aggregate_minutes = ((outside_loop.all_jobs_aggregate_total_elapsed_time % 3600) // 60) + ((outside_loop.all_jobs_aggregate_total_elapsed_time % 60) / 60) %}
+
+{% set all_jobs_manual_aggregate_days = outside_loop.manual_jobs_aggregate_total_elapsed_time // 86400 %}
+{% set all_jobs_manual_aggregate_hours = (outside_loop.manual_jobs_aggregate_total_elapsed_time % 86400) // 3600 %}
+{% set all_jobs__manual_aggregate_minutes = ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 3600) // 60) + ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 60) / 60) %}
+
+<table class="net_info">
+<tbody>
+  <tr>
+    <td>Total Automation</td>
+    <td class="sub_net_info">{{ all_jobs_aggregate_days | round(0) }} day(s) - {{ all_jobs_aggregate_hours | round(0) }} hour(s) - {{ all_jobs_aggregate_minutes | round(2) }} minute(s)</td>
+  </tr>
+  <tr>
+    <td>Manual Time Equivalent</td>
+    <td class="sub_net_info">{{ all_jobs_manual_aggregate_days | round(0) }} day(s) - {{ all_jobs_manual_aggregate_hours | round(0) }} hour(s) - {{ all_jobs__manual_aggregate_minutes | round(2) }} minute(s)</td>
+  </tr>
+</tbody>
+</table>
+
+    <div class="bar-container">
+       <div class="bar_manual_column">
+        <div class="bar manual" style="height: {{ ([outside_loop.all_jobs_aggregate_total_elapsed_time / [outside_loop.manual_jobs_aggregate_total_elapsed_time, outside_loop.all_jobs_aggregate_total_elapsed_time] | max * 150, 14] | max) | int }}px;">
+            {{ (outside_loop.all_jobs_aggregate_total_elapsed_time / 3600) | round(2) }} hours
+        </div>
+        <div class="automate_description">Automation Time</div>
+        </div>
+        <div class="bar_automate_column">
+        <div class="bar automate" style="height: {{ ([outside_loop.manual_jobs_aggregate_total_elapsed_time / [outside_loop.manual_jobs_aggregate_total_elapsed_time, outside_loop.all_jobs_aggregate_total_elapsed_time] | max * 150, 14] | max) | int }}px;">
+            {{ (outside_loop.manual_jobs_aggregate_total_elapsed_time / 3600) | round(2) }} hours
+        </div>
+        <div class="manual_description">Manual Time</div>
+        </div>
+    </div>
+
+
+<div class="engineer_container"">
+    {% set total_days = outside_loop.manual_jobs_aggregate_total_elapsed_time / 86400 %}
+    {% set full_engineers = (total_days // 260) | int %}
+    {% set partial_percentage = ((total_days % 260) / 260) * 100 %}
+
+    <!-- Loop for full engineer images -->
+    {% for i in range(full_engineers) %}
+        <div class="engineer">
+            <img src="engineer_icon.png" alt="Engineer" style="width: 100%;">
+        </div>
+    {% endfor %}
+
+    <!-- Partial engineer image -->
+    {% if partial_percentage > 0 %}
+        <div class="engineer_partial">
+            <div style="overflow: hidden; height: {{ partial_percentage }}%; position: absolute;">
+                <img src="engineer_icon.png" alt="Engineer" style="width: 100%;">
+            </div>
+        </div>
+    {% endif %}
+</div>
+    <div class="engineer_legend">
+    <div class="engineer_text">Automation has performed equivalent of {{ (total_days / 260) | round(2) }} FTEs</div>
+        <div class="legend_text">Legend:</div>
+        <img class="small_engineer" src="engineer_icon.png" alt="Engineer">
+        <div class="amount_engineer">1-engineer icon = 1 Full Time Engineer (FTE)</div>
+        <div class="small_description_engineer">Equivalent of 260 days per year</div>
+    </div>
