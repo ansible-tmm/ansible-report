@@ -4,7 +4,7 @@
   gather_facts: false
   vars:
     provided_project_id: ""
-    page_size: 25
+    page_size: 5
 
   tasks:
     - name: Include secrets
@@ -41,9 +41,9 @@
         return_content: true
       register: job_template_info
 
-    # - name: Print out project information
-    #   ansible.builtin.debug:
-    #     var: job_template_info
+    - name: Print out job_template_info
+      ansible.builtin.debug:
+        var: job_template_info
 
     - name: Fetch job list with pagination details
       ansible.builtin.uri:
@@ -56,9 +56,13 @@
         return_content: true
       register: job_list_response
 
-    - name: Calculate total pages
+    # - name: Calculate total pages
+    #   ansible.builtin.set_fact:
+    #     total_pages: "{{ (job_list_response.json.count + page_size - 1) // page_size }}"
+
+    - name: Calculate total pages (ensuring it's at least 1)
       ansible.builtin.set_fact:
-        total_pages: "{{ (job_list_response.json.count + page_size - 1) // page_size }}"
+        total_pages: "{{ ((job_list_response.json.count + page_size - 1) // page_size) if (job_list_response.json.count + page_size - 1) // page_size > 0 else 1 }}"
 
     - name: Debug total pages
       ansible.builtin.debug:
@@ -67,9 +71,9 @@
           - "Total jobs: {{ job_list_response.json.count }}"
           - "Total number of pages: {{ total_pages }}"
 
-    # - name: Sean override page , i.e. I only want to try 3 pages
-    #   set_fact:
-    #     total_pages: 2
+    - name: Sean override page , i.e. I only want to try 3 pages
+      set_fact:
+        total_pages: 2
 
     - name: Retrieve job list for each page and store in a dictionary
       ansible.builtin.uri:
@@ -83,14 +87,13 @@
       with_sequence: start=1 end={{ total_pages }}
       register: job_list_results
 
-    # - name: Debug job_list_results
-    #   ansible.builtin.debug:
-    #     var: job_list_results
+    - name: Debug job_list_results
+      ansible.builtin.debug:
+        var: job_list_results
 
     - name: Combine all job results into a single list
       ansible.builtin.set_fact:
         all_jobs: "{{ job_list_results.results | map(attribute='json.results') | flatten }}"
-
 
 - name: Build report with facts - Dynamic Documentation
   hosts: "{{ _hosts | default('localhost') }}"

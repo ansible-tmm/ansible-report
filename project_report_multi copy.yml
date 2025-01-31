@@ -1,0 +1,45 @@
+---
+- name: Retrieve inventory from Ansible Automation Controller
+  hosts: localhost
+  gather_facts: false
+  vars:
+    provided_project_ids: [] # List of project IDs
+    page_size: 2
+
+  tasks:
+    - name: Include secrets
+      ansible.builtin.include_vars: secret.yml
+
+    - name: Print out provided project IDs
+      ansible.builtin.debug:
+        msg: "Provided Project IDs are: {{ provided_project_ids }}"
+
+    - name: Fail if no Project IDs are set
+      ansible.builtin.fail:
+        msg: "No project IDs are set! Please set the var provided_project_ids with a list of IDs."
+      when: provided_project_ids | length == 0
+
+    - name: Loop through each project ID and fetch information
+      ansible.builtin.include_tasks: fetch_project_info.yml
+      loop: "{{ provided_project_ids }}"
+      loop_control:
+       loop_var: project_id
+      register: full_data_model
+
+    - name: print out full_data_model
+      ansible.builtin.debug:
+        var: full_data_model
+
+- name: Build report with facts - Dynamic Documentation
+  hosts: "{{ _hosts | default('localhost') }}"
+  gather_facts: true
+
+  tasks:
+    - name: Template report into HTML
+      ansible.builtin.include_role:
+        name: "template_project"
+
+    - name: Load report to host on AWS S3
+      ansible.builtin.include_role:
+        name: "build_report_s3"
+      when: inventory_hostname == 'localhost'

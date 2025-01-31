@@ -1,112 +1,129 @@
 <!-- INTERNAL TABLE FOR Ansible -->
 <div id="accordion">
-    {% set ns = namespace(total_elapsed_time=0.0) %}
 
-    {% if all_jobs | length > 0 %}
-        {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0) %}
+    {% for project_id, project_data in all_projects.items() %}
+        {% set project_info = project_data.project_info %}
+        {% set job_template_info = project_data.job_template_info %}
+        {% set all_jobs = project_data.all_jobs %}
 
-        {% for job in all_jobs %}
-            {% set job_elapsed_time = job.elapsed | default(0.0) %}
-            {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
-
-            {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
-            {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
+        {% set inventory_namespace = namespace(total_inventory_hosts=0) %}
+        {% for job_template in job_template_info.results %}
+            {% set inventory_namespace.total_inventory_hosts = inventory_namespace.total_inventory_hosts + job_template.summary_fields.inventory.total_hosts %}
         {% endfor %}
-    {% endif %}
 
-    {% set running = ns.total_hosts %}
-    {% set total = ns.total_hosts %}
+        {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0) %}
+        {% if all_jobs | length > 0 %}
+            {% for job in all_jobs %}
+                {% set job_elapsed_time = job.elapsed | default(0.0) %}
+                {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
+                {% set job_template_id = job.job_template %}
 
-    {% set total_jobs = all_jobs | length %}
-
-    {% set jobs_per_inventory = total_jobs | default("0") %}
-
-    {% if jobs_per_inventory <= 0 %}
-    {% set hours_to_create_automation = 0 %}
-    {% endif %}
-
-  <div class="test_highlight">
-        <h3>
-            <div id="region_title">DevOps Service: {{ project_info.json.name | default('unknown') }}</div>
-            {% if ns.total_elapsed_time is number %}
-                <div id="job_time">
-                {% set total_seconds = ns.total_elapsed_time %}
-                {% set days = total_seconds // 86400 %}
-                {% set hours = (total_seconds % 86400) // 3600 %}
-                {% set minutes = ((total_seconds % 3600) // 60) + ((total_seconds % 60) / 60) %}
-                {% set effective_running = running if running > 0 else 1 %}
-                {% set total_seconds_manual = (manual_time_per_job * ns.total_hosts) %}
-                {% set days_manual = total_seconds_manual // 86400 %}
-                {% set hours_manual = (total_seconds_manual % 86400) // 3600 %}
-                {% set minutes_manual = ((total_seconds_manual % 3600) // 60) + ((total_seconds_manual % 60) / 60) %}
-                {% set automation_cost = automated_process_cost * (total_seconds / 3600) %}
-                {% set manual_cost = (total_seconds_manual / 3600) * manual_cost_per_hour %}
-                {% set time_difference = total_seconds_manual - total_seconds %}
-                {% set days_time_difference = time_difference // 86400 %}
-                {% set hours_time_difference = (time_difference % 86400) // 3600 %}
-                {% set minutes_time_difference = ((time_difference % 3600) // 60) + ((time_difference % 60) / 60) %}
-                {% set automation_creation_cost = hours_to_create_automation * manual_cost_per_hour_to_automate %}
-                {% set automation_cost_savings = manual_cost - automation_cost - automation_creation_cost %}
-
-                <div id="time_saved">
-                    <div id="time_saved_title">Time Saved</div>
-                    <div id="time_saved_value">{{ days_time_difference | round(0) }} day(s) - {{ hours_time_difference | round(0) }} hour(s) - {{ minutes_time_difference | round(2) }} minute(s)</div>
-                </div>
-
-                <div id="automation_savings">
-                    <div id="automation_savings_title">Value of Automation</div>
-                    <div id="automation_savings_value">{{ "${:,.2f}".format(automation_cost_savings) }}</div>
-                </div>
-            </div>
-            {% else %}
-            <div id="no_automation">No Automation has been run</div>
-            {% endif %}
-
-
-        <div class="instances_highlight">
-            {% if total > 0 %}
-                {% if running > 0 %}
-                <div class="instances_running">
+                {% set project_job_template = job_template_info.results | selectattr("id", "equalto", job_template_id) | list %}
+                {% if project_job_template | length > 0 %}
+                    {% set project_job_template = project_job_template[0] %}
+                    {% set loop_manual_time_per_job = (project_job_template.extra_vars | from_yaml).manual_time_per_job | default(manual_time_per_job) %}
+                {% else %}
+                    {% set loop_manual_time_per_job = manual_time_per_job %}
                 {% endif %}
-                    <i class="fa-solid fa-server"></i> {{ running }} nodes
-                {% if running > 0 %}
-                </div>
+
+                {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
+                {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
+                {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + loop_manual_time_per_job %}
+            {% endfor %}
+        {% endif %}
+
+        {% set running = ns.total_hosts %}
+        {% set total = ns.total_hosts %}
+        {% set total_jobs = all_jobs | length %}
+
+        <div class="test_highlight">
+            <h3>
+                <div id="region_title">DevOps Service: {{ project_info.name | default('unknown') }}</div>
+                {% if ns.total_elapsed_time is number %}
+                    <div id="job_time">
+                        {% set total_seconds = ns.total_elapsed_time %}
+                        {% set days = total_seconds // 86400 %}
+                        {% set hours = (total_seconds % 86400) // 3600 %}
+                        {% set minutes = ((total_seconds % 3600) // 60) + ((total_seconds % 60) / 60) %}
+                        {% set effective_running = running if running > 0 else 1 %}
+                        {% set total_seconds_manual = ns.total_elapsed_manual_time %}
+                        {% set days_manual = total_seconds_manual // 86400 %}
+                        {% set hours_manual = (total_seconds_manual % 86400) // 3600 %}
+                        {% set minutes_manual = ((total_seconds_manual % 3600) // 60) + ((total_seconds_manual % 60) / 60) %}
+                        {% set time_difference = total_seconds_manual - total_seconds %}
+                        {% set days_time_difference = time_difference // 86400 %}
+                        {% set hours_time_difference = (time_difference % 86400) // 3600 %}
+                        {% set minutes_time_difference = ((time_difference % 3600) // 60) + ((time_difference % 60) / 60) %}
+
+                        <!-- manual_cost_per_hour is set in group_vars -->
+                        {% set manual_cost = (total_seconds_manual / 3600) * manual_cost_per_hour %}
+
+                        <!-- automated_process_cost is set in group_vars -->
+                        {% set automation_cost = automated_process_cost * (total_seconds / 3600) %}
+
+                        <!-- hours_to_create_automation and manual_cost_per_hour_to_automate are set in group_vars -->
+                        {% set automation_creation_cost = hours_to_create_automation * manual_cost_per_hour_to_automate %}
+                        {% set automation_cost_savings = manual_cost - automation_cost - automation_creation_cost %}
+
+                        <!-- because the manual cost can be configured on a per job template basis, we now need an average -->
+                        {% if total_jobs != 0 %}
+                        {% set average_manual_time_per_job = (total_seconds_manual / total_jobs) | round(2) %}
+                        {% else %}
+                        {% set average_manual_time_per_job = 0 %}
+                        {% endif %}
+
+
+                        <div id="time_saved">
+                            <div id="time_saved_title">Time Saved</div>
+                            <div id="time_saved_value">{{ days_time_difference | round(0) }} day(s) - {{ hours_time_difference | round(0) }} hour(s) - {{ minutes_time_difference | round(2) }} minute(s)</div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div id="no_automation">No Automation has been run</div>
                 {% endif %}
-            {% else %}
-                <div class="no_nodes">No Nodes | Single Node or API driven automation</div>
-            {% endif %}
-        </div>
 
-        </h3>
-        <div class="net_content">
-            <table class="net_info inventory_info">
-                <tbody>
-                    <tr>
-                        <th class="vpc_info"><p class="highlight_title">Project</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Description</p></th>
-                        <th class="vpc_info"><p class="highlight_title">SCM URL</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Job Templates</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Jobs</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Nodes Executed against</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Job Elapsed Time</p></th>
+                <div class="instances_highlight">
+                    <div class="instances_running">
+                        <i class="fa-solid fa-server"></i> {{ inventory_namespace.total_inventory_hosts }} nodes
+                    </div>
+                </div>
+            </h3>
 
-                    </tr>
-                    <tr>
-                        <td style="text-align: center;">
-                            <a target="_blank" href="https://{{ automation_controller_host }}{{ project_info.json.name }}">
-                                {{ project_info.json.name | default('unknown') }}
-                            </a>
-                        </td>
-                        <td style="text-align: center;">{{ project_info.json.description }}</td>
-                        <td style="text-align: center;"><a target=_"blank" href="{{ project_info.json.scm_url }}">{{ project_info.json.scm_url }}</a></td>
-                        <td style="text-align: center;">{{ job_template_info.json.count }}</td>
-                        <td style="text-align: center;">{{ total_jobs }}</td>
-                        <td style="text-align: center;">{{ ns.total_hosts }}</td>
-                        <td style="text-align: center;">{{ ns.total_elapsed_time }}</td>
-                    </tr>
-                </tbody>
-            </table>
-            <table class="net_info main_attraction">
+            <div class="net_content">
+                <table class="net_info inventory_info">
+                    <tbody>
+                        <tr>
+                            <th class="vpc_info"><p class="highlight_title">Project</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Description</p></th>
+                            <th class="vpc_info"><p class="highlight_title">SCM URL</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Job Templates</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Total Jobs</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Total Nodes Executed against</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Unique Nodes</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Total Job Elapsed Time</p></th>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center;">
+                                <a target="_blank" href="https://{{ automation_controller_host }}{{ project_info.name }}">
+                                    {{ project_info.name | default('unknown') }}
+                                </a>
+                            </td>
+                            <td style="text-align: center;">{{ project_info.description }}</td>
+                            <td style="text-align: center;">
+                                <a target="_blank" href="{{ project_info.scm_url }}">{{ project_info.scm_url }}</a>
+                            </td>
+                            <td style="text-align: center;">{{ job_template_info.count }}</td>
+                            <td style="text-align: center;">{{ total_jobs }}</td>
+                            <td style="text-align: center;">{{ ns.total_hosts }}</td>
+                            <td style="text-align: center;">{{ inventory_namespace.total_inventory_hosts }}</td>
+                            <td style="text-align: center;">{{ ns.total_elapsed_time | round(2) }} seconds</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- everything above here works jan31-2025 -->
+
+                <table class="net_info main_attraction">
                 <tbody>
                     <tr>
                         <th class="vpc_info title_main_attraction"><p class="highlight_title">Automation infra cost</p></th>
@@ -118,7 +135,29 @@
                     </tr>
                 </tbody>
             </table>
-            <!-- <p class="table_title">Explanation of calculations</p> -->
+
+
+            <table class="net_info inventory_info">
+                 <tbody>
+                        <tr>
+                            <th class="vpc_info"><p class="highlight_title">Job Template(s)</p></th>
+                            <th class="vpc_info"><p class="highlight_title">URL</p></th>
+                            <th class="vpc_info"><p class="highlight_title">manual_time_per_job</p></th>
+                        </tr>
+                {% for job_template in job_template_info.results %}
+                {% set parsed_extra = job_template.extra_vars | from_yaml %}
+                        <tr>
+                            <td>{{ job_template.name }}</td>
+                            <td>
+                                <a target="_blank" href="https://{{ automation_controller_host }}{{ job_template.url }}">
+                                    https://{{ automation_controller_host }}{{ job_template.url }}
+                                </a>
+                            </td>
+                            <td>{{ parsed_extra.manual_time_per_job | default(manual_time_per_job) }}</td>
+                        </tr>
+                {% endfor %}
+                </tbody>
+             </table>
 
             <!-- begin of expandable header -->
 
@@ -132,14 +171,14 @@
                     <tr>
                         <th class="vpc_info"><p class="highlight_title">Automation time</p><p class="description_text">all automation job runtimes added together</p></th>
                         <th class="vpc_info"><p class="highlight_title">Automation infra cost</p><p class="description_text">automated_process_cost * (total_seconds / 3600)<br>{{ automated_process_cost }} * {{ (total_seconds / 3600) | round(2) }}</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Manual Time per Job</p><p class="description_text">(seconds)</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">manual time * hosts executed against<br>{{ manual_time_per_job }} * {{ ns.total_hosts }}</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Manual Time per Job</p><p class="description_text">(seconds)</p><p class="description_text">average_manual_time_per_job = total_seconds_manual / total_jobs}<p></th>
+                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">average_manual_time_per_job * hosts executed against<br>{{ average_manual_time_per_job }} * {{ ns.total_hosts }}</p></th>
                         <th class="vpc_info"><p class="highlight_title">Manual cost</p><p class="description_text">manual_cost_per_hour * (total_seconds_manual / 3600)<br>{{ manual_cost_per_hour }} * {{ (total_seconds_manual / 3600) | round(2) }}</p></th>
                     </tr>
                     <tr>
                         <td style="text-align: center;">{{ days | round(0) }} day(s) - {{ hours | round(0) }} hour(s) - {{ minutes | round(2) }} minute(s)</td>
                         <td style="text-align: center;">${{ automation_cost | round(2) }}</td>
-                        <td style="text-align: center;">{{ manual_time_per_job }}</td>
+                        <td style="text-align: center;">{{ average_manual_time_per_job }}</td>
                         <td style="text-align: center;">{{ days_manual | round(0) }} day(s) - {{ hours_manual | round(0) }} hour(s) - {{ minutes_manual | round(2) }} minute(s)</td>
                         <td style="text-align: center;">${{ manual_cost | round(2) }}</td>
                     </tr>
@@ -151,7 +190,7 @@
                         <th class="vpc_info"><p class="highlight_title">Hours invested to create automation</p><p class="description_text">(hours)</p></th>
                         <th class="vpc_info"><p class="highlight_title">Cost per hour</p><p class="description_text">in $USD</p></th>
                         <th class="vpc_info"><p class="highlight_title">Automation creation cost</p><p class="description_text">hours_to_create_automation * manual_cost_per_hour_to_automate<br>{{ hours_to_create_automation }} * {{ manual_cost_per_hour_to_automate }}</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Value of Automation</p><p class="description_text">automation_cost_savings = manual_cost - automation_cost - automation_creation_cost<br>{{ manual_cost }} - {{ automation_cost | round(2) }} - {{ automation_creation_cost }}</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Value of Automation</p><p class="description_text">automation_cost_savings = manual_cost - automation_cost - automation_creation_cost<br>{{ manual_cost | round(2) }} - {{ automation_cost | round(2) }} - {{ automation_creation_cost }}</p></th>
                     </tr>
                     <tr>
                         <td style="text-align: center;">{{ hours_to_create_automation }}</td>
@@ -196,14 +235,12 @@
                     </tr>
                 </tbody>
             </table>
-
-            <!-- end of expandable header -->
             </div></div>
             <!-- end of expandable header -->
 
 
-        </div>
+    </div>
 
     </div>
 
-</div>
+    {% endfor %}
