@@ -46,10 +46,10 @@
       - "Total jobs: {{ job_list_response.json.count }}"
       - "Total number of pages: {{ total_pages }}"
 
-- name: Override total_pages to 2 if it is greater than 1
-  ansible.builtin.set_fact:
-    total_pages: 2
-  when: total_pages | int > 1
+# - name: Override total_pages to 2 if it is greater than 1
+#   ansible.builtin.set_fact:
+#     total_pages: 2
+#   when: total_pages | int > 1
 
 - name: Retrieve job list for each page and store in a dictionary
   ansible.builtin.uri:
