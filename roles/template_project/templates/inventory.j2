@@ -6,10 +6,26 @@
         {% set job_template_info = project_data.job_template_info %}
         {% set all_jobs = project_data.all_jobs %}
 
-        {% set inventory_namespace = namespace(total_inventory_hosts=0) %}
+        {% set inventory_namespace = namespace(total_inventory_hosts=0, total_inventory_list=[]) %}
+
         {% for job_template in job_template_info.results %}
-            {% set inventory_namespace.total_inventory_hosts = inventory_namespace.total_inventory_hosts + job_template.summary_fields.inventory.total_hosts %}
+            <!-- check if we already counted this specific unique inventory -->
+            {% if job_template.inventory not in inventory_namespace.total_inventory_list %}
+
+                <!-- add the unique value to the list -->
+                {% set inventory_namespace.total_inventory_list =
+                    inventory_namespace.total_inventory_list + [job_template.inventory]
+                %}
+
+                <!-- count the amount of nodes in the unique inventory -->
+                {% set inventory_namespace.total_inventory_hosts =
+                    inventory_namespace.total_inventory_hosts + job_template.summary_fields.inventory.total_hosts
+                %}
+            {% endif %}
         {% endfor %}
+        <!-- this will provide a list of all inventory_ids that are unique for this project
+        <!-- {{ inventory_namespace.total_inventory_list }} -->
+
 
         {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0) %}
         {% if all_jobs | length > 0 %}
@@ -143,6 +159,7 @@
                             <th class="vpc_info"><p class="highlight_title">Job Template(s)</p></th>
                             <th class="vpc_info"><p class="highlight_title">URL</p></th>
                             <th class="vpc_info"><p class="highlight_title">manual_time_per_job</p></th>
+                            <th class="vpc_info"><p class="highlight_title">inventory name</p></th>
                         </tr>
                 {% for job_template in job_template_info.results %}
                 {% set parsed_extra = job_template.extra_vars | from_yaml %}
@@ -154,6 +171,7 @@
                                 </a>
                             </td>
                             <td>{{ parsed_extra.manual_time_per_job | default(manual_time_per_job) }}</td>
+                            <td>{{ job_template.summary_fields.inventory.name | default("unknown") }}</td>
                         </tr>
                 {% endfor %}
                 </tbody>
