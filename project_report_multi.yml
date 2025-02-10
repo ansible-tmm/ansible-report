@@ -9,6 +9,7 @@
   tasks:
     - name: Include secrets
       ansible.builtin.include_vars: secret.yml
+      ignore_errors: true
 
     - name: Initialize all_projects as an empty dictionary
       ansible.builtin.set_fact:

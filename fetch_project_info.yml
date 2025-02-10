@@ -24,6 +24,24 @@
     return_content: true
   register: job_template_info
 
+- name: Fetch job template counts
+  ansible.builtin.uri:
+    url: "https://{{ automation_controller_host }}/api/v2/job_templates/{{ item.id }}/jobs/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ oauth_token }}"
+    force_basic_auth: true
+    validate_certs: "{{ verify_ssl }}"
+    return_content: true
+  register: job_template_counts
+  loop: "{{ job_template_info.json.results }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Print out job_template_counts
+  ansible.builtin.debug:
+    var: job_template_counts
+
 - name: Fetch job list with pagination details
   ansible.builtin.uri:
     url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ project_id }}&page_size={{ page_size }}"
