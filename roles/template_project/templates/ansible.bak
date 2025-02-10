@@ -37,52 +37,87 @@
 
 <!-- modified for project based counting -->
 
-{% set outside_loop = namespace(
-    all_jobs_aggregate_total_elapsed_time=0.0,
-    manual_jobs_aggregate_total_elapsed_time=0.0
+{# Create a global namespace for overall totals #}
+{% set global_ns = namespace(
+    global_total_elapsed_time=0.0,
+    global_total_hosts=0,
+    global_total_elapsed_manual_time=0.0,
+    global_total_jobs_total=0,
+    global_total_inventory_list=[]
 ) %}
 
-<!-- Initialize 'ns' with default values -->
-{% set ns = namespace(
-    total_elapsed_time=0.0,
-    total_hosts=0,
-    total_elapsed_manual_time=0.0
-) %}
+{% for project_id, project_data in all_projects.items() %}
+    {% set project_info = project_data.project_info %}
+    {% set job_template_info = project_data.job_template_info %}
+    {% set all_jobs = project_data.all_jobs %}
+    {% set all_jobs_length = all_jobs | length %}
+    {% set global_ns.global_total_jobs_total = global_ns.global_total_jobs_total + all_jobs_length %}
+    {% set inventory_namespace = namespace(total_inventory_hosts=0, total_inventory_list=[]) %}
 
-{% if all_jobs | length > 0 %}
-    {% for job in all_jobs %}
-        {% set job_elapsed_time = job.elapsed | default(0.0) %}
-        {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
-        {% set job_template_id = job.job_template %}
+    {% for job_template in job_template_info.results %}
+        <!-- check if we already counted this specific unique inventory -->
+        {% if job_template.inventory not in global_ns.global_total_inventory_list %}
 
-        {% set project_info_list = job_template_info.json.results | selectattr("id", "equalto", job_template_id) | list %}
-        {% if project_info_list | length > 0 %}
-            {% set project_info = project_info_list[0] %}
-            {% set loop_manual_time_per_job = (project_info.extra_vars | from_yaml).manual_time_per_job | default(0.0) %}
-        {% else %}
-            {% set loop_manual_time_per_job = 0.0 %}
-            {% set project_info = {'json': {'name': 'unknown', 'description': '', 'scm_url': ''}} %}
+            <!-- add the unique value to the list -->
+            {% set global_ns.global_total_inventory_list =
+                global_ns.global_total_inventory_list + [job_template.inventory]
+            %}
+
+            <!-- count the amount of nodes in the unique inventory -->
+            {% set inventory_namespace.total_inventory_hosts =
+                inventory_namespace.total_inventory_hosts + job_template.summary_fields.inventory.total_hosts
+            %}
         {% endif %}
-        <!-- job_id: {{ job_template_id }} manual time: {{ loop_manual_time_per_job }} -->
-        {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
-        {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
-        {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + loop_manual_time_per_job %}
     {% endfor %}
-{% endif %}
+    <!-- this will provide a list of all inventory_ids that are unique for this project
+    <!-- {{ inventory_namespace.total_inventory_list }} -->
 
-{% set running = ns.total_hosts %}
-{% set total = ns.total_hosts %}
+    {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0) %}
+    {% if all_jobs | length > 0 %}
+        {% for job in all_jobs %}
+            {% set job_elapsed_time = job.elapsed | default(0.0) %}
+            {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
+            {% set job_template_id = job.job_template %}
 
-{% set total_jobs = all_jobs | length %}
+            {% set project_job_template = job_template_info.results | selectattr("id", "equalto", job_template_id) | list %}
+            {% if project_job_template | length > 0 %}
+                {% set project_job_template = project_job_template[0] %}
+                {% set loop_manual_time_per_job = (project_job_template.extra_vars | from_yaml).manual_time_per_job | default(0.0) %}
+            {% else %}
+                {% set loop_manual_time_per_job = 0.0 %}
+            {% endif %}
 
-{% set jobs_per_inventory = total_jobs | default("0") %}
+            {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
+            {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
+            {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + loop_manual_time_per_job %}
+        {% endfor %}
+    {% endif %}
 
-{% set effective_running = running if running > 0 else 1 %}
+    {% set global_ns.global_total_elapsed_time = global_ns.global_total_elapsed_time + ns.total_elapsed_time %}
+    {% set global_ns.global_total_hosts = global_ns.global_total_hosts + inventory_namespace.total_inventory_hosts %}
+    {% set global_ns.global_total_elapsed_manual_time = global_ns.global_total_elapsed_manual_time + ns.total_elapsed_manual_time%}
+{% endfor %}
+{# After the loop finishes, we have global_ns.* as the total for ALL projects #}
+<hr>
+<h2>Global Totals Across All Projects</h2>
+<!-- <p>**All Projects** total automation time: {{ global_ns.global_total_elapsed_time }} seconds</p> -->
+<!-- <p>**All Projects** total hosts: {{ global_ns.global_total_hosts }}</p> -->
+<!-- <p>**All Projects** total manual time: {{ global_ns.global_total_elapsed_manual_time }} seconds</p> -->
+<!-- p>**All Jobs**: {{ global_ns.global_total_jobs_total }}</p> -->
+
+
+<!-- everything works above here Jan31, 2025 - Sean -->
+
+{% set total = global_ns.global_total_hosts %}
+
+{% set total_jobs = global_ns.global_total_jobs_total %}
 
 {% set total_seconds_manual = ns.total_elapsed_manual_time %}
 
-{% set outside_loop.all_jobs_aggregate_total_elapsed_time = ns.total_elapsed_time %}
-{% set outside_loop.manual_jobs_aggregate_total_elapsed_time = total_seconds_manual %}
+{% set outside_loop = namespace(
+    all_jobs_aggregate_total_elapsed_time=global_ns.global_total_elapsed_time,
+    manual_jobs_aggregate_total_elapsed_time=global_ns.global_total_elapsed_manual_time
+) %}
 
 
 <!-- Ensure 'project_info' is defined even if 'all_jobs' is empty -->
@@ -115,6 +150,18 @@
                 {{ all_jobs_manual_aggregate_days | round(0) }} day(s) -
                 {{ all_jobs_manual_aggregate_hours | round(0) }} hour(s) -
                 {{ all_jobs__manual_aggregate_minutes | round(2) }} minute(s)
+            </td>
+        </tr>
+        <tr>
+            <td>Total Unique Hosts</td>
+            <td class="sub_net_info">
+            {{ global_ns.global_total_hosts }}
+            </td>
+        </tr>
+        <tr>
+            <td>Total Jobs</td>
+            <td class="sub_net_info">
+            {{ global_ns.global_total_jobs_total }}
             </td>
         </tr>
     </tbody>

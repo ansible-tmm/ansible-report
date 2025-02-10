@@ -26,7 +26,7 @@
 
 - name: Fetch job template counts
   ansible.builtin.uri:
-    url: "https://{{ automation_controller_host }}/api/v2/job_templates/{{ item.id }}/jobs/"
+    url: "https://{{ automation_controller_host }}/api/v2/job_templates/{{ item.id }}/jobs/?project_id={{ project_id }}"
     method: GET
     headers:
       Authorization: "Bearer {{ oauth_token }}"
@@ -91,6 +91,7 @@
       project_id: {
         'all_jobs': all_jobs,
         'job_template_info': job_template_info.json,
-        'project_info': project_info.json
+        'project_info': project_info.json,
+        'job_template_counts': job_template_counts
       }
     }) }}"
