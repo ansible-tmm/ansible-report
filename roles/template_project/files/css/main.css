@@ -518,3 +518,19 @@ img.small_engineer {
 .automate_description {
   align-self: center;
 }
+
+.savings_text {
+  align-self: center;
+}
+
+table.net_info.main_attraction_left {
+  background-color: #ffffff;
+  box-shadow: 0 0 0;
+}
+
+table.main_attraction_left p.highlight_value_left {
+  font-size: 80px;
+  padding: 0px;
+  margin: 0px;
+  color: #4CAF50;
+}

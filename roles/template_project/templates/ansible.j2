@@ -43,7 +43,10 @@
     global_total_hosts=0,
     global_total_elapsed_manual_time=0.0,
     global_total_jobs_total=0,
-    global_total_inventory_list=[]
+    global_total_inventory_list=[],
+    global_total_automation_cost=0.0,
+    global_total_manual_cost=0.0,
+    global_total_automation_creation_cost=0.0
 ) %}
 
 {% for project_id, project_data in all_projects.items() %}
@@ -70,7 +73,15 @@
     <!-- this will provide a list of all inventory_ids that are unique for this project
     <!-- {{ inventory_namespace.total_inventory_list }} -->
 
-    {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0, job_count=0) %}
+    {% set ns = namespace(
+        total_elapsed_time=0.0,
+        total_hosts=0,
+        total_elapsed_manual_time=0.0,
+        job_count=0,
+        project_automation_cost=0.0,
+        project_manual_cost=0.0,
+        project_automation_creation_cost=0.0
+    ) %}
     <!-- <p>Project: {{ project_id }} | Total jobs from API: {{ all_jobs | length }}</p> -->
     {% if all_jobs is iterable and all_jobs | length > 0 %}
         {% for job in all_jobs %}
@@ -82,32 +93,74 @@
             <!-- <p>Job ID: {{ job.id }} | Job Template ID: {{ job.job_template }} | Found Template Count: {{ project_job_template | length }}</p> -->
             {% if project_job_template | length > 0 %}
                 {% set project_job_template = project_job_template[0] %}
-                {% set loop_manual_time_per_job = (project_job_template.extra_vars | from_yaml).manual_time_per_job | default(manual_time_per_job) %}
+                {% set parsed_extra_vars = project_job_template.extra_vars | from_yaml %}
+
+                <!-- Get template-specific values or use defaults from group_vars -->
+                {% set loop_manual_time_per_job = parsed_extra_vars.manual_time_per_job | default(manual_time_per_job) %}
+                {% set loop_automated_process_cost = parsed_extra_vars.automated_process_cost | default(automated_process_cost) %}
+                {% set loop_manual_cost_per_hour = parsed_extra_vars.manual_cost_per_hour | default(manual_cost_per_hour) %}
+                {% set loop_manual_cost_per_hour_to_automate = parsed_extra_vars.manual_cost_per_hour_to_automate | default(manual_cost_per_hour_to_automate) %}
+                {% set loop_hours_to_create_automation = parsed_extra_vars.hours_to_create_automation | default(hours_to_create_automation) %}
+
                 {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
                 {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
-                {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + loop_manual_time_per_job %}
+
+                <!-- Calculate manual time with job-specific host count -->
+                {% set job_manual_time = loop_manual_time_per_job * job_total_hosts %}
+                {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + job_manual_time %}
+
+                <!-- Calculate job-specific costs and add to project totals -->
+                {% set job_automation_cost = loop_automated_process_cost * (job_elapsed_time / 3600) %}
+                {% set job_manual_cost = (job_manual_time / 3600) * loop_manual_cost_per_hour %}
+
+                {% set ns.project_automation_cost = ns.project_automation_cost + job_automation_cost %}
+                {% set ns.project_manual_cost = ns.project_manual_cost + job_manual_cost %}
+
                 {% set ns.job_count = ns.job_count + 1 %}
             {% endif %}
-
         {% endfor %}
     {% endif %}
+
+    <!-- Add automation creation cost at project level (this is not per-job) -->
+    {% set parsed_project_extra_vars = project_info.extra_vars | default('{}') | from_yaml %}
+    {% set project_hours_to_create = parsed_project_extra_vars.hours_to_create_automation | default(hours_to_create_automation) %}
+    {% set project_cost_per_hour_to_automate = parsed_project_extra_vars.manual_cost_per_hour_to_automate | default(manual_cost_per_hour_to_automate) %}
+    {% set ns.project_automation_creation_cost = project_hours_to_create * project_cost_per_hour_to_automate %}
+
+    <!-- Define these variables for compatibility with other templates -->
+    {% set project_automation_cost = ns.project_automation_cost %}
+    {% set project_manual_cost = ns.project_manual_cost %}
+    {% set project_automation_creation_cost = ns.project_automation_creation_cost %}
+
     {% set global_ns.global_total_jobs_total = global_ns.global_total_jobs_total + ns.job_count %}
-    <!-- <p>Project: {{ project_id }} - Jobs counted: {{ ns.job_count }}</p> -->
     {% set global_ns.global_total_elapsed_time = global_ns.global_total_elapsed_time + ns.total_elapsed_time %}
     {% set global_ns.global_total_hosts = global_ns.global_total_hosts + inventory_namespace.total_inventory_hosts %}
-    {% set global_ns.global_total_elapsed_manual_time = global_ns.global_total_elapsed_manual_time + ns.total_elapsed_manual_time%}
+    {% set global_ns.global_total_elapsed_manual_time = global_ns.global_total_elapsed_manual_time + ns.total_elapsed_manual_time %}
+    {% set global_ns.global_total_automation_cost = global_ns.global_total_automation_cost + project_automation_cost %}
+    {% set global_ns.global_total_manual_cost = global_ns.global_total_manual_cost + project_manual_cost %}
+    {% set global_ns.global_total_automation_creation_cost = global_ns.global_total_automation_creation_cost + project_automation_creation_cost %}
     <!-- <p>DEBUG: Global Jobs Count So Far: {{ global_ns.global_total_jobs_total }}</p> -->
 {% endfor %}
+
+{% set global_total_savings = global_ns.global_total_manual_cost - global_ns.global_total_automation_cost - global_ns.global_total_automation_creation_cost %}
+
 {# After the loop finishes, we have global_ns.* as the total for ALL projects #}
+
 <hr>
+<table class="net_info main_attraction_left">
+<tbody>
+    <tr>
+        <th class="vpc_info title_main_attraction_left"><p class="highlight_title">Total Cost Savings</p></th>
+    </tr>
+    <tr>
+        <td style="text-align: center;"><p class="highlight_value_left">{{ "${:,.2f}".format(global_total_savings) }}</p></td>
+    </tr>
+</tbody>
+</table>
+
+<hr>
+
 <h2>Global Totals Across All Projects</h2>
-<!-- <p>**All Projects** total automation time: {{ global_ns.global_total_elapsed_time }} seconds</p> -->
-<!-- <p>**All Projects** total hosts: {{ global_ns.global_total_hosts }}</p> -->
-<!-- <p>**All Projects** total manual time: {{ global_ns.global_total_elapsed_manual_time }} seconds</p> -->
-<!-- <p>**All Jobs**: {{ global_ns.global_total_jobs_total }}</p> -->
-
-
-<!-- everything works above here Jan31, 2025 - Sean -->
 
 {% set total = global_ns.global_total_hosts %}
 
@@ -152,6 +205,22 @@
                 {{ all_jobs_manual_aggregate_hours | round(0) }} hour(s) -
                 {{ all_jobs__manual_aggregate_minutes | round(2) }} minute(s)
             </td>
+        </tr>
+        <tr>
+            <td>Total Automation Cost</td>
+            <td class="sub_net_info">${{ global_ns.global_total_automation_cost | round(2) }}</td>
+        </tr>
+        <tr>
+            <td>Total Manual Cost</td>
+            <td class="sub_net_info">{{ "${:,.2f}".format(global_ns.global_total_manual_cost) }}</td>
+        </tr>
+        <tr>
+            <td>Total Automation Creation Cost</td>
+            <td class="sub_net_info">${{ global_ns.global_total_automation_creation_cost | round(2) }}</td>
+        </tr>
+        <tr>
+            <td>Total Cost Savings</td>
+            <td class="sub_net_info">{{ "${:,.2f}".format(global_total_savings) }}</td>
         </tr>
         <tr>
             <td>Total Unique Hosts</td>
@@ -199,6 +268,31 @@
     </div>
 </div>
 
+<!-- New cost comparison bar chart -->
+{% set max_cost = [global_ns.global_total_automation_cost + global_ns.global_total_automation_creation_cost, global_ns.global_total_manual_cost] | max %}
+{% if max_cost > 0 %}
+    {% set height_automation_cost = [((global_ns.global_total_automation_cost + global_ns.global_total_automation_creation_cost) / max_cost * 150), 14] | max | int %}
+    {% set height_manual_cost = [(global_ns.global_total_manual_cost / max_cost * 150), 14] | max | int %}
+{% else %}
+    {% set height_automation_cost = 14 %}
+    {% set height_manual_cost = 14 %}
+{% endif %}
+
+<div class="bar-container">
+    <div class="bar_manual_column">
+        <div class="bar manual" style="height: {{ height_automation_cost }}px;">
+            ${{ (global_ns.global_total_automation_cost + global_ns.global_total_automation_creation_cost) | round(2) }}
+        </div>
+        <div class="automate_description">Total Automation Cost</div>
+    </div>
+    <div class="bar_automate_column">
+        <div class="bar automate" style="height: {{ height_manual_cost }}px;">
+            ${{ global_ns.global_total_manual_cost | round(2) }}
+        </div>
+        <div class="manual_description">Manual Cost</div>
+    </div>
+</div>
+
 <div class="engineer_container">
     {% set total_days = outside_loop.manual_jobs_aggregate_total_elapsed_time / 86400 %}
     {% set full_engineers = (total_days // 260) | int %}
@@ -222,6 +316,7 @@
 </div>
 <div class="engineer_legend">
     <div class="engineer_text">Automation has performed equivalent of {{ (total_days / 260) | round(2) }} FTEs</div>
+    <div class="savings_text">Total savings from automation: {{ "${:,.2f}".format(global_total_savings) }}</div>
     <div class="legend_text">Legend:</div>
     <img class="small_engineer" src="engineer_icon.png" alt="Engineer">
     <div class="amount_engineer">1-engineer icon = 1 Full Time Engineer (FTE)</div>
