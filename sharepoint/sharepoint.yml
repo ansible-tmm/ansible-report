@@ -1,0 +1,219 @@
+---
+- name: Upload Ansible Report to SharePoint and Create Page with Embedded Content
+  hosts: localhost
+  gather_facts: no
+  vars:
+    # SharePoint configuration
+    sharepoint_site: "https://your-organization.sharepoint.com/sites/YourSiteName"
+    sharepoint_document_library: "Shared Documents/Ansible Reports"
+    sharepoint_username: "your_email@your-organization.com"
+    sharepoint_password: "{{ lookup('ansible.builtin.env', 'SHAREPOINT_PASSWORD') }}"
+
+    # Page configuration
+    page_name: "AnsibleAutomationReport"
+    page_title: "Ansible Automation Platform Report"
+
+    # Report file locations based on your file structure
+    report_files:
+      # Main HTML file
+      - src: "./index.html"
+        dest: "index.html"
+      # CSS file
+      - src: "./files/css/main.css"
+        dest: "css/main.css"
+      # Images from root directory
+      - src: "./aap_icon.png"
+        dest: "aap_icon.png"
+      - src: "./engineer_icon.png"
+        dest: "engineer_icon.png"
+      - src: "./redhat-ansible-logo.svg"
+        dest: "redhat-ansible-logo.svg"
+      - src: "./webpage_logo.png"
+        dest: "webpage_logo.png"
+      # Images from files directory
+      - src: "./files/aap_icon.png"
+        dest: "aap_icon.png"
+      - src: "./files/engineer_background.png"
+        dest: "engineer_background.png"
+      - src: "./files/engineer_icon.png"
+        dest: "engineer_icon.png"
+      - src: "./files/redhat-ansible-logo.svg"
+        dest: "redhat-ansible-logo.svg"
+      - src: "./files/webpage_logo.png"
+        dest: "webpage_logo.png"
+      - src: "./files/aws.png"
+        dest: "aws.png"
+      - src: "./files/router.png"
+        dest: "router.png"
+
+  tasks:
+    - name: Create temporary directory
+      ansible.builtin.tempfile:
+        state: directory
+      register: temp_dir
+
+    - name: Get SharePoint access token
+      ansible.builtin.uri:
+        url: "https://login.microsoftonline.com/common/oauth2/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: "password"
+          client_id: "00000000-0000-0000-0000-000000000000"  # Default SharePoint client ID
+          resource: "{{ sharepoint_site }}"
+          username: "{{ sharepoint_username }}"
+          password: "{{ sharepoint_password }}"
+        status_code: 200
+      register: token_response
+      no_log: true
+
+    - name: Set access token variable
+      ansible.builtin.set_fact:
+        access_token: "{{ token_response.json.access_token }}"
+      no_log: true
+
+    - name: Get Form Digest Value for POST requests
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/contextinfo"
+        method: POST
+        headers:
+          Accept: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+        status_code: 200
+      register: digest_response
+
+    - name: Set Form Digest Value
+      ansible.builtin.set_fact:
+        form_digest_value: "{{ digest_response.json.d.GetContextWebInformation.FormDigestValue }}"
+
+    - name: Create the report folder in document library
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/folders"
+        method: POST
+        body_format: json
+        body: |
+          {
+            "__metadata": { "type": "SP.Folder" },
+            "ServerRelativeUrl": "{{ sharepoint_document_library }}"
+          }
+        headers:
+          Accept: "application/json;odata=verbose"
+          Content-Type: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          X-RequestDigest: "{{ form_digest_value }}"
+        status_code: [200, 201, 409]  # 409 is returned if folder already exists
+      ignore_errors: yes
+
+    - name: Create CSS folder in SharePoint
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/folders"
+        method: POST
+        body_format: json
+        body: |
+          {
+            "__metadata": { "type": "SP.Folder" },
+            "ServerRelativeUrl": "{{ sharepoint_document_library }}/css"
+          }
+        headers:
+          Accept: "application/json;odata=verbose"
+          Content-Type: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          X-RequestDigest: "{{ form_digest_value }}"
+        status_code: [200, 201, 409]  # 409 is returned if folder already exists
+      ignore_errors: yes
+
+    - name: Check if files exist before uploading
+      ansible.builtin.stat:
+        path: "{{ item.src }}"
+      register: file_stats
+      with_items: "{{ report_files }}"
+
+    - name: Filter out non-existent files
+      ansible.builtin.set_fact:
+        existing_files: "{{ report_files | selectattr('src', 'in', file_stats.results | map(attribute='stat') | selectattr('exists', 'equalto', true) | map(attribute='path') | list) | list }}"
+
+    - name: Display files to be uploaded
+      ansible.builtin.debug:
+        msg: "Preparing to upload {{ existing_files | length }} files to SharePoint"
+
+    - name: Upload files to SharePoint
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/GetFolderByServerRelativeUrl('{{ sharepoint_document_library }}')/Files/add(url='{{ item.dest }}',overwrite=true)"
+        method: POST
+        headers:
+          Accept: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/octet-stream"
+        src: "{{ item.src }}"
+        status_code: [200, 201]
+      with_items: "{{ existing_files }}"
+      register: upload_results
+
+    - name: Record HTML file details
+      ansible.builtin.set_fact:
+        html_file_url: "{{ upload_results.results | selectattr('item.dest', 'equalto', 'index.html') | map(attribute='json') | map(attribute='d') | map(attribute='ServerRelativeUrl') | first }}"
+      when: upload_results.results | selectattr('item.dest', 'equalto', 'index.html') | list | length > 0
+
+    - name: Display full HTML file path
+      ansible.builtin.debug:
+        var: html_file_url
+
+    - name: Create Modern SharePoint Page with Embed Web Part
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/GetFolderByServerRelativeUrl('SitePages')/Files/add(url='{{ page_name }}.aspx',overwrite=true)"
+        method: POST
+        headers:
+          Accept: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/octet-stream"
+        body: "<!DOCTYPE html><html><body>Placeholder</body></html>"
+        status_code: [200, 201]
+      register: page_creation
+
+    - name: Get Created Page Details
+      ansible.builtin.set_fact:
+        page_url: "{{ page_creation.json.d.ServerRelativeUrl }}"
+
+    - name: Set Page as Modern Page and Add Web Part to Embed HTML
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/GetFileByServerRelativeUrl('{{ page_url }}')/ListItemAllFields"
+        method: PATCH
+        headers:
+          Accept: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json;odata=verbose"
+          X-RequestDigest: "{{ form_digest_value }}"
+          IF-MATCH: "*"
+          X-HTTP-Method: "MERGE"
+        body: |
+          {
+            "__metadata": { "type": "SP.Data.SitePagesItem" },
+            "Title": "{{ page_title }}",
+            "PageLayoutType": "Article",
+            "PromotedState": 0,
+            "CanvasContent1": "{\"controlType\":3,\"id\":\"cbe7b0a9-3504-44dd-a3a3-0e5cacd07788\",\"position\":{\"zoneIndex\":1,\"sectionIndex\":1,\"controlIndex\":1},\"webPartId\":\"490d7c76-1824-45b2-9de3-676421c997fa\",\"webPartData\":{\"id\":\"490d7c76-1824-45b2-9de3-676421c997fa\",\"instanceId\":\"cbe7b0a9-3504-44dd-a3a3-0e5cacd07788\",\"title\":\"Embed\",\"description\":\"Embed content from a URL or embed code.\",\"dataVersion\":\"1.4\",\"properties\":{\"embedCode\":\"<iframe src=\\\"{{ sharepoint_site }}{{ html_file_url }}\\\" width=\\\"100%\\\" height=\\\"800px\\\" frameborder=\\\"0\\\"></iframe>\",\"shouldScaleWidth\":true}}}"
+          }
+        status_code: [200, 201, 204]
+      register: page_update
+
+    - name: Publish the Page
+      ansible.builtin.uri:
+        url: "{{ sharepoint_site }}/_api/web/GetFileByServerRelativeUrl('{{ page_url }}')/Publish"
+        method: POST
+        headers:
+          Accept: "application/json;odata=verbose"
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json;odata=verbose"
+          X-RequestDigest: "{{ form_digest_value }}"
+        body: "{}"
+        status_code: [200, 201, 204]
+      register: publish_result
+
+    - name: Display final page URL
+      ansible.builtin.debug:
+        msg: "Your report is now available at: {{ sharepoint_site }}/SitePages/{{ page_name }}.aspx"
+
+    - name: Clean up temporary directory
+      ansible.builtin.file:
+        path: "{{ temp_dir.path }}"
+        state: absent
