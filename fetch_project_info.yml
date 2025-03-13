@@ -26,7 +26,7 @@
 
 - name: Fetch job template counts
   ansible.builtin.uri:
-    url: "https://{{ automation_controller_host }}/api/v2/job_templates/{{ item.id }}/jobs/?project_id={{ project_id }}"
+    url: "https://{{ automation_controller_host }}/api/v2/job_templates/{{ item.id }}/jobs/?project_id={{ project_id }}&created__gt={{ two_weeks_ago | default(omit, true) }}"
     method: GET
     headers:
       Authorization: "Bearer {{ oauth_token }}"
@@ -44,7 +44,7 @@
 
 - name: Fetch job list with pagination details
   ansible.builtin.uri:
-    url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ project_id }}&page_size={{ page_size }}"
+    url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ project_id }}&page_size={{ page_size }}&created__gt={{ two_weeks_ago | default(omit, true) }}"
     method: GET
     headers:
       Authorization: "Bearer {{ oauth_token }}"
@@ -64,14 +64,9 @@
       - "Total jobs: {{ job_list_response.json.count }}"
       - "Total number of pages: {{ total_pages }}"
 
-# - name: Override total_pages to 2 if it is greater than 1
-#   ansible.builtin.set_fact:
-#     total_pages: 2
-#   when: total_pages | int > 1
-
 - name: Retrieve job list for each page and store in a dictionary
   ansible.builtin.uri:
-    url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ project_id }}&page_size={{ page_size }}&page={{ item }}"
+    url: "https://{{ automation_controller_host }}/api/v2/jobs/?project_id={{ project_id }}&page_size={{ page_size }}&page={{ item }}&created__gt={{ two_weeks_ago | default(omit, true) }}"
     method: GET
     headers:
       Authorization: "Bearer {{ oauth_token }}"

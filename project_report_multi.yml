@@ -5,6 +5,8 @@
   vars:
     provided_project_ids: [] # List of project IDs
     page_size: 25
+    # Cross-platform Python-based solution
+    two_weeks_ago: "{{ lookup('pipe', 'python3 -c \"import datetime; print((datetime.datetime.now() - datetime.timedelta(days=14)).strftime(\\\"%Y-%m-%dT%H:%M:%SZ\\\"))\"') }}"
 
   tasks:
     - name: Include secrets
