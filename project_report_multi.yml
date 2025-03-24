@@ -5,10 +5,14 @@
   vars:
     provided_project_ids: [] # List of project IDs
     page_size: 25
-    # Cross-platform Python-based solution
-    two_weeks_ago: "{{ lookup('pipe', 'python3 -c \"import datetime; print((datetime.datetime.now() - datetime.timedelta(days=14)).strftime(\\\"%Y-%m-%dT%H:%M:%SZ\\\"))\"') }}"
 
   tasks:
+    # Cross-platform Python-based solution
+    - name: Set date range facts
+      set_fact:
+        two_weeks_ago: "{{ lookup('pipe', 'python3 -c \"import datetime; print((datetime.datetime.utcnow() - datetime.timedelta(days=14)).strftime(\\\"%Y-%m-%dT%H:%M:%SZ\\\"))\"') }}"
+        today: "{{ lookup('pipe', 'python3 -c \"import datetime; print(datetime.datetime.utcnow().strftime(\\\"%Y-%m-%dT%H:%M:%SZ\\\"))\"') }}"
+
     - name: Include secrets
       ansible.builtin.include_vars: secret.yml
       ignore_errors: true
