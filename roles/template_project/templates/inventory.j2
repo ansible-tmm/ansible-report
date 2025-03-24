@@ -179,7 +179,10 @@
 
                     {% set parsed_extra = job_template.extra_vars | from_yaml %}
                     {% set loop_manual_time = parsed_extra.manual_time_per_job | default(manual_time_per_job) %}
-                    {% set loop_total_hosts = job_template.summary_fields.inventory.total_hosts | default(1) %}
+
+                    {% set raw_total_hosts = job_template.summary_fields.inventory.total_hosts | default(0) %}
+                    {% set loop_total_hosts = [raw_total_hosts, 1] | max %}
+
                             <tr>
                             <td>{{ job_template.name }}</td>
                             <td>
@@ -207,9 +210,9 @@
             <table class="net_info">
                 <tbody>
                     <tr>
-                        <th class="vpc_info"><p class="highlight_title">Automation time</p><p class="description_text">all automation job runtimes added together</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Automation time</p><p class="description_text">all automation job runtimes added together</p><p class="description_text">{{ total_seconds }} seconds</p></th>
                         <th class="vpc_info"><p class="highlight_title">Automation infra cost</p><p class="description_text">automated_process_cost * (total_seconds / 3600)<br>{{ automated_process_cost }} * {{ (total_seconds / 3600) | round(2) }}</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">Add all manual values together from above table</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">Add all manual values together from above table</p><p class="description_text">{{ total_seconds_manual }} seconds</p></th>
                         <th class="vpc_info"><p class="highlight_title">Manual cost</p><p class="description_text">manual_cost_per_hour * (total_seconds_manual / 3600)<br>{{ manual_cost_per_hour }} * {{ (total_seconds_manual / 3600) | round(2) }}</p></th>
                     </tr>
                     <tr>

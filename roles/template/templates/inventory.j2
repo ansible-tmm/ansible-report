@@ -32,7 +32,6 @@
         {% for job in job_list_dict[inventory_id].results %}
             {% set job_elapsed_time = job.elapsed | default(0.0) %}
             {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
-            <!-- {% set outside_loop.all_jobs_aggregate_total_elapsed_time = outside_loop.all_jobs_aggregate_total_elapsed_time + job_elapsed_time %} -->
         {% endfor %}
 
     {% endif %}

@@ -86,7 +86,9 @@
     {% if all_jobs is iterable and all_jobs | length > 0 %}
         {% for job in all_jobs %}
             {% set job_elapsed_time = job.elapsed | default(0.0) %}
-            {% set job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
+            {% set raw_job_total_hosts = job.summary_fields.inventory.total_hosts | default(0) %}
+            {% set job_total_hosts = [raw_job_total_hosts, 1] | max %}
+
             {% set job_template_id = job.job_template %}
 
             {% set project_job_template = job_template_info.results | selectattr("id", "equalto", job_template_id) | list %}
@@ -186,7 +188,7 @@
 
 {% set all_jobs_manual_aggregate_days = outside_loop.manual_jobs_aggregate_total_elapsed_time // 86400 %}
 {% set all_jobs_manual_aggregate_hours = (outside_loop.manual_jobs_aggregate_total_elapsed_time % 86400) // 3600 %}
-{% set all_jobs__manual_aggregate_minutes = ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 3600) // 60) + ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 60) / 60) %}
+{% set all_jobs_manual_aggregate_minutes = ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 3600) // 60) + ((outside_loop.manual_jobs_aggregate_total_elapsed_time % 60) / 60) %}
 
 <table class="net_info">
     <tbody>
@@ -203,7 +205,7 @@
             <td class="sub_net_info">
                 {{ all_jobs_manual_aggregate_days | round(0) }} day(s) -
                 {{ all_jobs_manual_aggregate_hours | round(0) }} hour(s) -
-                {{ all_jobs__manual_aggregate_minutes | round(2) }} minute(s)
+                {{ all_jobs_manual_aggregate_minutes | round(2) }} minute(s)
             </td>
         </tr>
         <tr>
