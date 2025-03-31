@@ -534,3 +534,60 @@ table.main_attraction_left p.highlight_value_left {
   margin: 0px;
   color: #4CAF50;
 }
+
+
+.bar_row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  height: 32px; /* Ensures consistent vertical height */
+}
+
+.bar_label {
+  width: 250px; /* Adjust as needed */
+  padding-right: 12px;
+  font-weight: bold;
+  text-align: right;
+}
+
+.bar_fill_container {
+  flex: 1;
+  background-color: #eee;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  height: 100%; /* Match bar_row height */
+}
+
+.bar_fill {
+  background-color: #4CAF50;
+  padding: 4px 8px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.bar_zero_label {
+  position: absolute;
+  left: 20px;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  color: black;
+  font-weight: bold;
+}
+
+.bar_zero_label_sean {
+  position: absolute;
+  left: 20px;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+}

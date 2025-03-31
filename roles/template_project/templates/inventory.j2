@@ -1,3 +1,4 @@
+{% set summary_table = namespace(rows=[]) %}
 <!-- INTERNAL TABLE FOR Ansible -->
 <div id="accordion">
 
@@ -53,6 +54,7 @@
         {% set running = ns.total_hosts %}
         {% set total = ns.total_hosts %}
         {% set total_jobs = ns.job_count %}
+        {% set summary_table.rows = summary_table.rows + [(project_info.name | default('unknown'), total_jobs)] %}
 
         <div class="test_highlight">
             <h3>
@@ -283,3 +285,30 @@
     </div>
 
     {% endfor %}
+
+
+{% set sorted_rows = summary_table.rows | sort(attribute=1, reverse=true) %}
+{% set max_job_count = sorted_rows[0][1] if sorted_rows else 1 %}
+
+<div class="job_bar_chart">
+    <h2>Job Run Volume per Project (Relative Bar Chart)</h2>
+    <div class="bar_chart_container">
+        {% for project_name, job_count in sorted_rows %}
+            {% set percent_width = (job_count / max_job_count * 100) | round(1) %}
+            {% set text_color = 'white' if percent_width > 10 else 'black' %}
+            <div class="bar_row">
+                <div class="bar_label">{{ project_name }}</div>
+                <div class="bar_fill_container" style="position: relative;">
+                    {% if job_count == 0 %}
+                        <div class="bar_fill" style="width: 0%;"></div>
+                        <div class="bar_zero_label">0 job runs</div>
+                    {% else %}
+                        <div class="bar_fill" style="width: {{ percent_width }}%; color: {{ text_color }};">
+                        <div class="bar_zero_label_sean">{{ job_count }} job runs</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

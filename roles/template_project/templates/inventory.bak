@@ -3,6 +3,7 @@
 
     {% for project_id, project_data in all_projects.items() %}
         {% set project_info = project_data.project_info %}
+        {% set job_template_counts = project_data.job_template_counts %}
         {% set job_template_info = project_data.job_template_info %}
         {% set all_jobs = project_data.all_jobs %}
 
@@ -27,7 +28,7 @@
         <!-- {{ inventory_namespace.total_inventory_list }} -->
 
 
-        {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0) %}
+        {% set ns = namespace(total_elapsed_time=0.0, total_hosts=0, total_elapsed_manual_time=0.0, job_count=0) %}
         {% if all_jobs | length > 0 %}
             {% for job in all_jobs %}
                 {% set job_elapsed_time = job.elapsed | default(0.0) %}
@@ -38,19 +39,20 @@
                 {% if project_job_template | length > 0 %}
                     {% set project_job_template = project_job_template[0] %}
                     {% set loop_manual_time_per_job = (project_job_template.extra_vars | from_yaml).manual_time_per_job | default(manual_time_per_job) %}
-                {% else %}
-                    {% set loop_manual_time_per_job = manual_time_per_job %}
+                    {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
+                    {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
+                    <!-- you have to multiply the manual time by the number of hosts -->
+                    {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + (loop_manual_time_per_job * job_total_hosts) %}
+                    {% set ns.job_count = ns.job_count + 1 %}
                 {% endif %}
 
-                {% set ns.total_elapsed_time = ns.total_elapsed_time + job_elapsed_time %}
-                {% set ns.total_hosts = ns.total_hosts + job_total_hosts %}
-                {% set ns.total_elapsed_manual_time = ns.total_elapsed_manual_time + loop_manual_time_per_job %}
+
             {% endfor %}
         {% endif %}
 
         {% set running = ns.total_hosts %}
         {% set total = ns.total_hosts %}
-        {% set total_jobs = all_jobs | length %}
+        {% set total_jobs = ns.job_count %}
 
         <div class="test_highlight">
             <h3>
@@ -158,20 +160,41 @@
                         <tr>
                             <th class="vpc_info"><p class="highlight_title">Job Template(s)</p></th>
                             <th class="vpc_info"><p class="highlight_title">URL</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Job Runs</p></th>
                             <th class="vpc_info"><p class="highlight_title">manual_time_per_job</p></th>
-                            <th class="vpc_info"><p class="highlight_title">inventory name</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Inventory Name</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Inventory Hosts</p></th>
+                            <th class="vpc_info"><p class="highlight_title">Total Manual Time</p><p class="description_text">manual_time_per_job * Inventory Hosts * Job Runs</p></th>
+
                         </tr>
                 {% for job_template in job_template_info.results %}
-                {% set parsed_extra = job_template.extra_vars | from_yaml %}
-                        <tr>
+
+                    {% set loop_job_template_count = job_template_counts.results | selectattr("item.id", "equalto", job_template.id) | list %}
+
+                    {% if loop_job_template_count %}
+                        {% set loop_job_template_count_count_var = loop_job_template_count[0].json.count %}
+                    {% else %}
+                        {% set loop_job_template_count_count_var = 0 %}
+                    {% endif %}
+
+                    {% set parsed_extra = job_template.extra_vars | from_yaml %}
+                    {% set loop_manual_time = parsed_extra.manual_time_per_job | default(manual_time_per_job) %}
+
+                    {% set raw_total_hosts = job_template.summary_fields.inventory.total_hosts | default(0) %}
+                    {% set loop_total_hosts = [raw_total_hosts, 1] | max %}
+
+                            <tr>
                             <td>{{ job_template.name }}</td>
                             <td>
                                 <a target="_blank" href="https://{{ automation_controller_host }}/#/templates/job_template/{{ job_template.id }}/details">
                                     https://{{ automation_controller_host }}/#/templates/job_template/{{ job_template.id }}/details
                                 </a>
                             </td>
-                            <td>{{ parsed_extra.manual_time_per_job | default(manual_time_per_job) }}</td>
+                            <td>{{ loop_job_template_count_count_var }}</td>
+                            <td>{{ loop_manual_time }}</td>
                             <td>{{ job_template.summary_fields.inventory.name | default("unknown") }}</td>
+                            <td>{{ loop_total_hosts }}</td>
+                            <td>{{ loop_total_hosts * loop_manual_time * loop_job_template_count_count_var }}</td>
                         </tr>
                 {% endfor %}
                 </tbody>
@@ -187,16 +210,14 @@
             <table class="net_info">
                 <tbody>
                     <tr>
-                        <th class="vpc_info"><p class="highlight_title">Automation time</p><p class="description_text">all automation job runtimes added together</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Automation time</p><p class="description_text">all automation job runtimes added together</p><p class="description_text">{{ total_seconds }} seconds</p></th>
                         <th class="vpc_info"><p class="highlight_title">Automation infra cost</p><p class="description_text">automated_process_cost * (total_seconds / 3600)<br>{{ automated_process_cost }} * {{ (total_seconds / 3600) | round(2) }}</p></th>
-                        <th class="vpc_info"><p class="highlight_title">Manual Time per Job</p><p class="description_text">(seconds)</p><p class="description_text">average_manual_time_per_job = total_seconds_manual / total_jobs}<p></th>
-                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">average_manual_time_per_job * hosts executed against<br>{{ average_manual_time_per_job }} * {{ ns.total_hosts }}</p></th>
+                        <th class="vpc_info"><p class="highlight_title">Total Time if entirely Manual</p><p class="description_text">Add all manual values together from above table</p><p class="description_text">{{ total_seconds_manual }} seconds</p></th>
                         <th class="vpc_info"><p class="highlight_title">Manual cost</p><p class="description_text">manual_cost_per_hour * (total_seconds_manual / 3600)<br>{{ manual_cost_per_hour }} * {{ (total_seconds_manual / 3600) | round(2) }}</p></th>
                     </tr>
                     <tr>
                         <td style="text-align: center;">{{ days | round(0) }} day(s) - {{ hours | round(0) }} hour(s) - {{ minutes | round(2) }} minute(s)</td>
                         <td style="text-align: center;">${{ automation_cost | round(2) }}</td>
-                        <td style="text-align: center;">{{ average_manual_time_per_job }}</td>
                         <td style="text-align: center;">{{ days_manual | round(0) }} day(s) - {{ hours_manual | round(0) }} hour(s) - {{ minutes_manual | round(2) }} minute(s)</td>
                         <td style="text-align: center;">${{ manual_cost | round(2) }}</td>
                     </tr>
