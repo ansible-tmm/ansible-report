@@ -11,7 +11,7 @@
         {% set inventory_namespace = namespace(total_inventory_hosts=0, total_inventory_list=[]) %}
 
         {% for job_template in job_template_info.results %}
-            {% if job_template.inventory is defined and job_template.inventory not in inventory_namespace.total_inventory_list %}
+            {% if job_template.inventory is not none and job_template.inventory not in inventory_namespace.total_inventory_list %}
 
                 {% set inventory_namespace.total_inventory_list =
                     inventory_namespace.total_inventory_list + [job_template.inventory]
@@ -183,7 +183,12 @@
                     {% set parsed_extra = job_template.extra_vars | from_yaml %}
                     {% set loop_manual_time = parsed_extra.manual_time_per_job | default(manual_time_per_job) %}
 
-                    {% set raw_total_hosts = job_template.summary_fields.inventory.total_hosts | default(0) %}
+                    {% if job_template.summary_fields.inventory is defined and job_template.summary_fields.inventory is not none %}
+                        {% set raw_total_hosts = job_template.summary_fields.inventory.total_hosts | default(0) %}
+                    {% else %}
+                        {% set raw_total_hosts = 0 %}
+                    {% endif %}
+
                     {% set loop_total_hosts = [raw_total_hosts, 1] | max %}
 
                             <tr>
@@ -195,7 +200,13 @@
                             </td>
                             <td>{{ loop_job_template_count_count_var }}</td>
                             <td>{{ loop_manual_time }}</td>
-                            <td>{{ job_template.summary_fields.inventory.name | default("unknown") }}</td>
+                            <td>
+                            {% if job_template.summary_fields.inventory is defined and job_template.summary_fields.inventory is not none %}
+                                {{ job_template.summary_fields.inventory.name | default("unknown") }}
+                            {% else %}
+                                unknown
+                            {% endif %}
+                            </td>
                             <td>{{ loop_total_hosts }}</td>
                             <td>{{ loop_total_hosts * loop_manual_time * loop_job_template_count_count_var }}</td>
                         </tr>
@@ -289,7 +300,7 @@
 
 
 {% set sorted_rows = summary_table.rows | sort(attribute=1, reverse=true) %}
-{% set max_job_count = sorted_rows[0][1] if sorted_rows else 1 %}
+{% set max_job_count = sorted_rows[0][1] if sorted_rows and sorted_rows[0][1] > 0 else 1 %}
 
 <div class="job_bar_chart">
     <h2>Job Run Volume per Project (Relative Bar Chart)</h2>
