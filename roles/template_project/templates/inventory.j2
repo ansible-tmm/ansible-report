@@ -11,20 +11,21 @@
         {% set inventory_namespace = namespace(total_inventory_hosts=0, total_inventory_list=[]) %}
 
         {% for job_template in job_template_info.results %}
-            <!-- check if we already counted this specific unique inventory -->
-            {% if job_template.inventory not in inventory_namespace.total_inventory_list %}
+            {% if job_template.inventory is defined and job_template.inventory not in inventory_namespace.total_inventory_list %}
 
-                <!-- add the unique value to the list -->
                 {% set inventory_namespace.total_inventory_list =
                     inventory_namespace.total_inventory_list + [job_template.inventory]
                 %}
 
-                <!-- count the amount of nodes in the unique inventory -->
-                {% set inventory_namespace.total_inventory_hosts =
-                    inventory_namespace.total_inventory_hosts + job_template.summary_fields.inventory.total_hosts
-                %}
+                {% if job_template.summary_fields.inventory is defined %}
+                    {% set inventory_namespace.total_inventory_hosts =
+                        inventory_namespace.total_inventory_hosts + (job_template.summary_fields.inventory.total_hosts | default(0))
+                    %}
+                {% endif %}
+
             {% endif %}
         {% endfor %}
+
         <!-- this will provide a list of all inventory_ids that are unique for this project
         <!-- {{ inventory_namespace.total_inventory_list }} -->
 

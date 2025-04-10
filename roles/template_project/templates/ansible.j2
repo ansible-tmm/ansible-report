@@ -124,7 +124,7 @@
     {% endif %}
 
     <!-- Add automation creation cost at project level (this is not per-job) -->
-    {% set parsed_project_extra_vars = project_info.extra_vars | default('{}') | from_yaml %}
+    {% set parsed_project_extra_vars = project_info.extra_vars | default('{}') | from_yaml | default({}) %}
     {% set project_hours_to_create = parsed_project_extra_vars.hours_to_create_automation | default(hours_to_create_automation) %}
     {% set project_cost_per_hour_to_automate = parsed_project_extra_vars.manual_cost_per_hour_to_automate | default(manual_cost_per_hour_to_automate) %}
     {% set ns.project_automation_creation_cost = project_hours_to_create * project_cost_per_hour_to_automate %}
