@@ -1,0 +1,8 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: print debug
+      ansible.builtin.debug:
+        msg: "dummy message"
+      delegate_to: localhost
